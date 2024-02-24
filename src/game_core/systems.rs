@@ -11,24 +11,24 @@ use crate::game_core::structs::IsTurn;
 
 use super::{
     events::GameMessageEvent,
-    structs::{Health, IsAlive, Player, TurnSpeed, Weapon},
+    structs::{Health, IsAlive, Player, TurnProgress, TurnSpeed, Weapon},
 };
 
 pub(crate) fn race_for_turn(
     mut message_writer: EventWriter<GameMessageEvent>,
-    mut players: Query<(&Player, &mut TurnSpeed), With<IsAlive>>,
+    mut players: Query<(&Player, &TurnSpeed, &mut TurnProgress), With<IsAlive>>,
 ) {
     let mut messages: Vec<GameMessageEvent> = vec![];
-    for (player, mut turnspeed) in players.iter_mut() {
+    for (player, turnspeed, mut turnprogress) in players.iter_mut() {
         messages.push(format!("{} has {:?} speed", player.name, turnspeed).into());
         messages.push(
             format!(
                 "{} has {:?} progress for a turn",
-                player.name, turnspeed.progress
+                player.name, turnprogress.progress
             )
             .into(),
         );
-        turnspeed.progress += turnspeed.speed;
+        turnprogress.progress += turnspeed.speed;
     }
     message_writer.send_batch(messages);
 }
@@ -36,18 +36,18 @@ pub(crate) fn race_for_turn(
 pub(crate) fn select_who_has_turn(
     mut message_writer: EventWriter<GameMessageEvent>,
     mut commands: Commands,
-    mut players_with_turns: Query<(Entity, &Player, &mut TurnSpeed), With<IsAlive>>,
+    mut players_with_turns: Query<(Entity, &Player, &mut TurnProgress), With<IsAlive>>,
 ) {
-    let mut entities_with_turn: Vec<(Entity, &Player, Mut<'_, TurnSpeed>)> = vec![];
+    let mut entities_with_turn: Vec<(Entity, &Player, Mut<'_, TurnProgress>)> = vec![];
     let mut weights: Vec<u16> = vec![];
     let mut messages: Vec<GameMessageEvent> = vec![];
 
-    for (entity, player, turnspeed) in players_with_turns.iter_mut() {
-        if turnspeed.progress >= 100 {
+    for (entity, player, turnprogress) in players_with_turns.iter_mut() {
+        if turnprogress.progress >= 100 {
             messages.push(format!("Giving turn to {}", player.name).into());
             commands.entity(entity).insert(IsTurn);
-            weights.push(turnspeed.progress.clone());
-            entities_with_turn.push((entity, player, turnspeed));
+            weights.push(turnprogress.progress.clone());
+            entities_with_turn.push((entity, player, turnprogress));
         }
     }
     match entities_with_turn.len() {
@@ -95,7 +95,7 @@ pub(crate) fn attack(
         Ok(res) => res,
         Err(_) => return,
     };
-    health.0 -= weapon.damage as i16;
+    health.hp -= weapon.damage as i16;
     let messages: Vec<GameMessageEvent> = vec![
         format!(
             "{}, {}'nın kafasına {}le vurdu.",
@@ -114,7 +114,7 @@ pub(crate) fn update_alive(
 ) {
     let mut messages: Vec<GameMessageEvent> = vec![];
     for (entity, player, health) in players.iter() {
-        if health.0 <= 0 {
+        if health.hp <= 0 {
             commands.entity(entity).remove::<IsAlive>();
             messages.push(format!("{} öldü.", player.name).into());
         }

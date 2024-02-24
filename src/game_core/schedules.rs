@@ -6,7 +6,7 @@ use bevy_ecs::{
 
 use super::{
     events::{message_reader, GameMessageEvent},
-    structs::{Health, IsAlive, Player, TurnSpeed, Weapon},
+    structs::{Health, IsAlive, Player, TurnProgress, TurnSpeed, Weapon},
     systems::{attack, check_game_end, race_for_turn, select_who_has_turn, update_alive},
 };
 
@@ -24,32 +24,30 @@ pub(crate) fn run() {
     // let bundle = PlayerBundle();
     world.spawn((
         Player {
+            id: 1,
             name: "Kaan".to_string(),
         },
         Weapon {
             damage: 30,
             name: "Kılıç".to_string(),
         },
-        Health(30),
-        TurnSpeed {
-            progress: 0,
-            speed: 50,
-        },
+        Health { hp: 30 },
+        TurnSpeed { speed: 50 },
+        TurnProgress { progress: 0 },
         IsAlive,
     ));
     world.spawn((
         Player {
+            id: 2,
             name: "E da".to_string(),
         },
         Weapon {
             damage: 300,
             name: "Tüfek".to_string(),
         },
-        Health(3000),
-        TurnSpeed {
-            progress: 0,
-            speed: 30,
-        },
+        Health { hp: 3000 },
+        TurnSpeed { speed: 50 },
+        TurnProgress { progress: 0 },
         IsAlive,
     ));
 
@@ -64,6 +62,5 @@ pub(crate) fn run() {
     game_end_schedule.run(&mut world);
     messages_schedule.run(&mut world);
     world.clear_trackers();
-
     // }
 }

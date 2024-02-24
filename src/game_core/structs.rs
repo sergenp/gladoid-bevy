@@ -1,27 +1,34 @@
 use bevy_ecs::component::Component;
 
 #[derive(Debug, Component)]
-pub(crate) struct TurnSpeed {
-    pub speed: u16,
+pub struct TurnProgress {
     pub progress: u16,
 }
 
-#[derive(Component)]
-pub(crate) struct IsTurn;
+#[derive(Debug, Component)]
+pub struct TurnSpeed {
+    pub speed: u16,
+}
 
 #[derive(Component)]
-pub(crate) struct IsAlive;
+pub struct IsTurn;
 
 #[derive(Component)]
-pub(crate) struct Player {
+pub struct IsAlive;
+
+#[derive(Component)]
+pub struct Player {
+    pub id: u32,
     pub name: String,
 }
 
 #[derive(Component)]
-pub(crate) struct Health(pub(crate) i16);
+pub struct Health {
+    pub hp: i16,
+}
 
 #[derive(Component)]
-pub(crate) struct Weapon {
+pub struct Weapon {
     pub damage: u16,
     pub name: String,
 }
