@@ -11,26 +11,16 @@ use super::{
         attack, check_game_end, get_player_action, race_for_turn, select_who_has_turn, update_alive,
     },
 };
-pub(crate) fn spawn_player(world: &mut World, name: String, hp: i16) {
-    world.spawn((
-        Player {
-            id: 1,
-            name: name.to_string(),
-        },
-        Weapon {
-            damage: 3,
-            name: "Kılıç".to_string(),
-        },
-        Health { hp },
-        TurnSpeed { speed: 50 },
-        TurnProgress { progress: 0 },
-        IsAlive,
-    ));
+
+enum GameWorldState {
+    Fighting,
+    Done,
 }
 
 pub(crate) struct GladoidGameWorld {
     world: World,
     schedules: Vec<Schedule>,
+    state: GameWorldState,
 }
 
 impl GladoidGameWorld {
@@ -62,16 +52,23 @@ impl GladoidGameWorld {
         schedules.push(messages_schedule);
         Self {
             world,
-            schedules: schedules,
+            schedules,
+            state: GameWorldState::Fighting,
         }
     }
 
     pub fn tick(&mut self) {
+        match self.state {
+            GameWorldState::Done => return,
+            GameWorldState::Fighting => (),
+        }
+
         println!("Ticking...");
         let game_end_event = self.world.get_resource::<Events<GameEndEvent>>().unwrap();
         let game_end_event_reader = game_end_event.get_reader();
         if game_end_event_reader.len(&game_end_event) > 0 {
             println!("Game has ended, can't progress further.");
+            self.state = GameWorldState::Done;
             return;
         }
 
