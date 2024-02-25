@@ -5,6 +5,9 @@ pub(crate) struct GameMessageEvent {
     pub(crate) message: String,
 }
 
+#[derive(Event, Default, Debug)]
+pub(crate) struct GameEndEvent;
+
 impl From<String> for GameMessageEvent {
     fn from(value: String) -> Self {
         GameMessageEvent { message: value }

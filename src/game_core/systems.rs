@@ -10,7 +10,7 @@ use rand::{distributions::WeightedIndex, prelude::Distribution, thread_rng};
 use crate::game_core::structs::IsTurn;
 
 use super::{
-    events::GameMessageEvent,
+    events::{GameEndEvent, GameMessageEvent},
     structs::{Health, IsAlive, Player, TurnProgress, TurnSpeed, Weapon},
 };
 
@@ -20,6 +20,7 @@ pub(crate) fn race_for_turn(
 ) {
     let mut messages: Vec<GameMessageEvent> = vec![];
     for (player, turnspeed, mut turnprogress) in players.iter_mut() {
+        turnprogress.progress += turnspeed.speed;
         messages.push(format!("{} has {:?} speed", player.name, turnspeed).into());
         messages.push(
             format!(
@@ -28,7 +29,6 @@ pub(crate) fn race_for_turn(
             )
             .into(),
         );
-        turnprogress.progress += turnspeed.speed;
     }
     message_writer.send_batch(messages);
 }
@@ -46,7 +46,7 @@ pub(crate) fn select_who_has_turn(
         if turnprogress.progress >= 100 {
             messages.push(format!("Giving turn to {}", player.name).into());
             commands.entity(entity).insert(IsTurn);
-            weights.push(turnprogress.progress.clone());
+            weights.push(turnprogress.progress);
             entities_with_turn.push((entity, player, turnprogress));
         }
     }
@@ -84,10 +84,11 @@ pub(crate) fn select_who_has_turn(
 
 pub(crate) fn attack(
     mut message_writer: EventWriter<GameMessageEvent>,
-    player_with_turn: Query<(&Player, &Weapon), (With<IsTurn>, With<IsAlive>)>,
+    mut commands: Commands,
+    player_with_turn: Query<(Entity, &Player, &Weapon), (With<IsTurn>, With<IsAlive>)>,
     mut player_without_turn: Query<(&Player, &mut Health), (Without<IsTurn>, With<IsAlive>)>,
 ) {
-    let (player1, weapon) = match player_with_turn.get_single() {
+    let (entity, player1, weapon) = match player_with_turn.get_single() {
         Ok(res) => res,
         Err(_) => return,
     };
@@ -95,6 +96,7 @@ pub(crate) fn attack(
         Ok(res) => res,
         Err(_) => return,
     };
+    commands.entity(entity).remove::<IsTurn>();
     health.hp -= weapon.damage as i16;
     let messages: Vec<GameMessageEvent> = vec![
         format!(
@@ -124,6 +126,7 @@ pub(crate) fn update_alive(
 
 pub(crate) fn check_game_end(
     mut message_writer: EventWriter<GameMessageEvent>,
+    mut game_end_writer: EventWriter<GameEndEvent>,
     dead_player: Query<&Player, Without<IsAlive>>,
     alive_player: Query<&Player, With<IsAlive>>,
 ) {
@@ -132,8 +135,19 @@ pub(crate) fn check_game_end(
     if let Ok(dead_player) = dead_player.get_single() {
         if let Ok(alive_player) = alive_player.get_single() {
             messages
-                .push(format!("{} öldü. {} kazandı.", dead_player.name, alive_player.name).into())
+                .push(format!("{} öldü. {} kazandı.", dead_player.name, alive_player.name).into());
+            game_end_writer.send(GameEndEvent);
         }
     };
     message_writer.send_batch(messages);
+}
+
+pub(crate) fn get_player_action(
+    mut message_writer: EventWriter<GameMessageEvent>,
+    player_with_turn: Query<&Player, (With<IsTurn>, With<IsAlive>)>,
+) {
+    let player_with_turn = match player_with_turn.get_single() {
+        Ok(res) => res,
+        Err(_) => return,
+    };
 }
