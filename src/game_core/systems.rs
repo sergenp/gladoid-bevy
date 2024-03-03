@@ -12,7 +12,7 @@ use crate::game_core::structs::IsTurn;
 
 use super::{
     actions::ActionType,
-    events::{GameEndEvent, GameMessageEvent},
+    events::{GameEndEvent, GameMessageEvent, PlayerDiedEvent},
     structs::{Health, IsAlive, Player, TurnProgress, TurnSpeed, Weapon},
 };
 
@@ -75,11 +75,10 @@ pub(crate) fn race_for_turn(
 
 pub(crate) fn attack(
     mut message_writer: EventWriter<GameMessageEvent>,
-    mut commands: Commands,
-    player_with_turn: Query<(Entity, &Player, &Weapon), (With<IsTurn>, With<IsAlive>)>,
+    player_with_turn: Query<(&Player, &Weapon), (With<IsTurn>, With<IsAlive>)>,
     mut player_without_turn: Query<(&Player, &mut Health), (Without<IsTurn>, With<IsAlive>)>,
 ) {
-    let (entity, player1, weapon) = match player_with_turn.get_single() {
+    let (player1, weapon) = match player_with_turn.get_single() {
         Ok(res) => res,
         Err(_) => return,
     };
@@ -87,7 +86,6 @@ pub(crate) fn attack(
         Ok(res) => res,
         Err(_) => return,
     };
-    commands.entity(entity).remove::<IsTurn>();
     health.hp -= weapon.damage as i16;
     let messages: Vec<GameMessageEvent> = vec![
         format!(
@@ -100,19 +98,30 @@ pub(crate) fn attack(
     message_writer.send_batch(messages);
 }
 
-pub(crate) fn update_alive(
+pub(crate) fn end_turn(
     mut message_writer: EventWriter<GameMessageEvent>,
     mut commands: Commands,
-    players: Query<(Entity, &Player, &Health), With<IsAlive>>,
+    players_with_turn: Query<(Entity, &Player), (With<IsTurn>, With<IsAlive>)>,
 ) {
-    let mut messages: Vec<GameMessageEvent> = vec![];
-    for (entity, player, health) in players.iter() {
-        if health.hp <= 0 {
-            commands.entity(entity).remove::<IsAlive>();
-            messages.push(format!("{} öldü.", player.name).into());
-        }
+    let mut messages: Vec<GameMessageEvent> = Vec::new();
+    for (entity, player) in players_with_turn.iter() {
+        commands.entity(entity).remove::<IsTurn>();
+        messages.push(format!("Removing turn from {}...", player.name).into())
     }
     message_writer.send_batch(messages);
+}
+
+pub(crate) fn update_alive(
+    mut commands: Commands,
+    mut player_died_writer: EventWriter<PlayerDiedEvent>,
+    players: Query<(Entity, &Health), With<IsAlive>>,
+) {
+    for (entity, health) in players.iter() {
+        if health.hp <= 0 {
+            commands.entity(entity).remove::<IsAlive>();
+            player_died_writer.send_default();
+        }
+    }
 }
 
 pub(crate) fn check_game_end(
@@ -127,7 +136,7 @@ pub(crate) fn check_game_end(
         if let Ok(alive_player) = alive_player.get_single() {
             messages
                 .push(format!("{} öldü. {} kazandı.", dead_player.name, alive_player.name).into());
-            game_end_writer.send(GameEndEvent);
+            game_end_writer.send_default();
         }
     };
     message_writer.send_batch(messages);

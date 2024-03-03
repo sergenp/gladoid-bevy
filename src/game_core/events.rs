@@ -8,6 +8,9 @@ pub(crate) struct GameMessageEvent {
 #[derive(Event, Default, Debug)]
 pub(crate) struct GameEndEvent;
 
+#[derive(Event, Default, Debug)]
+pub(crate) struct PlayerDiedEvent;
+
 impl From<String> for GameMessageEvent {
     fn from(value: String) -> Self {
         GameMessageEvent { message: value }

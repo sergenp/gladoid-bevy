@@ -1,6 +1,7 @@
 use bevy_ecs::{
     event::Events,
     schedule::{
+        common_conditions::on_event,
         common_conditions::{resource_equals, resource_exists},
         Condition, IntoSystemConfigs, Schedule,
     },
@@ -9,9 +10,9 @@ use bevy_ecs::{
 
 use super::{
     actions::ActionType,
-    events::{message_reader, GameEndEvent, GameMessageEvent},
+    events::{message_reader, GameEndEvent, GameMessageEvent, PlayerDiedEvent},
     structs::{Health, IsAlive, Player, TurnProgress, TurnSpeed, Weapon},
-    systems::{attack, check_game_end, get_player_action, race_for_turn, update_alive},
+    systems::{attack, check_game_end, end_turn, get_player_action, race_for_turn, update_alive},
 };
 
 pub enum GameWorldState {
@@ -34,10 +35,13 @@ impl GladoidGameWorld {
         let mut game_end_schedule = Schedule::default();
         let mut messages_schedule = Schedule::default();
         let mut input_schedule = Schedule::default();
+        let mut cleanup_schedule = Schedule::default();
 
+        let player_died_event = Events::<PlayerDiedEvent>::default();
         let game_message_events = Events::<GameMessageEvent>::default();
         let game_end_event = Events::<GameEndEvent>::default();
 
+        world.insert_resource(player_died_event);
         world.insert_resource(game_message_events);
         world.insert_resource(game_end_event);
 
@@ -48,14 +52,16 @@ impl GladoidGameWorld {
             // giving 1 to Attack variant will match every "Attack", it is here to satisfy resource_equals
             resource_exists::<ActionType>().and_then(resource_equals(ActionType::Attack(1))),
         ));
-        messages_schedule.add_systems(message_reader);
-        game_end_schedule.add_systems(check_game_end);
+        messages_schedule.add_systems(message_reader.run_if(on_event::<GameMessageEvent>()));
+        game_end_schedule.add_systems(check_game_end.run_if(on_event::<PlayerDiedEvent>()));
+        cleanup_schedule.add_systems(end_turn);
 
         let mut schedules = Vec::new();
         let mut event_schedules = Vec::new();
         schedules.push(turn_schedule);
         schedules.push(input_schedule);
         schedules.push(attack_schedule);
+        schedules.push(cleanup_schedule);
         event_schedules.push(game_end_schedule);
         event_schedules.push(messages_schedule);
         Self {
