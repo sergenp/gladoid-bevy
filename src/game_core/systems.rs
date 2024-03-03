@@ -6,48 +6,39 @@ use bevy_ecs::{
     world::Mut,
 };
 use rand::{distributions::WeightedIndex, prelude::Distribution, thread_rng};
+use std::io;
 
 use crate::game_core::structs::IsTurn;
 
 use super::{
+    actions::ActionType,
     events::{GameEndEvent, GameMessageEvent},
     structs::{Health, IsAlive, Player, TurnProgress, TurnSpeed, Weapon},
 };
 
 pub(crate) fn race_for_turn(
     mut message_writer: EventWriter<GameMessageEvent>,
-    mut players: Query<(&Player, &TurnSpeed, &mut TurnProgress), With<IsAlive>>,
+    mut commands: Commands,
+    mut players: Query<(Entity, &Player, &TurnSpeed, &mut TurnProgress), With<IsAlive>>,
 ) {
     let mut messages: Vec<GameMessageEvent> = vec![];
-    for (player, turnspeed, mut turnprogress) in players.iter_mut() {
-        turnprogress.progress += turnspeed.speed;
-        messages.push(format!("{} has {:?} speed", player.name, turnspeed).into());
+    let mut entities_with_turn: Vec<(Entity, &Player, Mut<'_, TurnProgress>)> = vec![];
+    let mut weights: Vec<u16> = vec![];
+    for (entity, player, turn_speed, mut turn_progress) in players.iter_mut() {
+        turn_progress.progress += turn_speed.speed;
+        messages.push(format!("{} has {:?} speed", player.name, turn_speed).into());
         messages.push(
             format!(
                 "{} has {:?} progress for a turn",
-                player.name, turnprogress.progress
+                player.name, turn_progress.progress
             )
             .into(),
         );
-    }
-    message_writer.send_batch(messages);
-}
-
-pub(crate) fn select_who_has_turn(
-    mut message_writer: EventWriter<GameMessageEvent>,
-    mut commands: Commands,
-    mut players_with_turns: Query<(Entity, &Player, &mut TurnProgress), With<IsAlive>>,
-) {
-    let mut entities_with_turn: Vec<(Entity, &Player, Mut<'_, TurnProgress>)> = vec![];
-    let mut weights: Vec<u16> = vec![];
-    let mut messages: Vec<GameMessageEvent> = vec![];
-
-    for (entity, player, turnprogress) in players_with_turns.iter_mut() {
-        if turnprogress.progress >= 100 {
+        if turn_progress.progress >= 100 {
             messages.push(format!("Giving turn to {}", player.name).into());
             commands.entity(entity).insert(IsTurn);
-            weights.push(turnprogress.progress);
-            entities_with_turn.push((entity, player, turnprogress));
+            weights.push(turn_progress.progress);
+            entities_with_turn.push((entity, player, turn_progress));
         }
     }
     match entities_with_turn.len() {
