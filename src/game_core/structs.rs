@@ -27,7 +27,7 @@ pub struct Health {
     pub hp: i16,
 }
 
-#[derive(Component)]
+#[derive(Component, Debug)]
 pub struct Weapon {
     pub damage: u16,
     pub name: String,

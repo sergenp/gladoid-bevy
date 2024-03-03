@@ -1,15 +1,17 @@
 use bevy_ecs::{
     event::Events,
-    schedule::{IntoSystemConfigs, Schedule},
+    schedule::{
+        common_conditions::{resource_equals, resource_exists},
+        Condition, IntoSystemConfigs, Schedule,
+    },
     world::World,
 };
 
 use super::{
+    actions::ActionType,
     events::{message_reader, GameEndEvent, GameMessageEvent},
     structs::{Health, IsAlive, Player, TurnProgress, TurnSpeed, Weapon},
-    systems::{
-        attack, check_game_end, get_player_action, race_for_turn, select_who_has_turn, update_alive,
-    },
+    systems::{attack, check_game_end, get_player_action, race_for_turn, update_alive},
 };
 
 pub enum GameWorldState {
@@ -39,9 +41,13 @@ impl GladoidGameWorld {
         world.insert_resource(game_message_events);
         world.insert_resource(game_end_event);
 
-        turn_schedule.add_systems((race_for_turn, select_who_has_turn.after(race_for_turn)));
+        turn_schedule.add_systems(race_for_turn);
         input_schedule.add_systems(get_player_action);
-        attack_schedule.add_systems((attack, update_alive.after(attack)));
+        attack_schedule.add_systems((attack, update_alive.after(attack)).run_if(
+            // only run if there is an ActionType that matches ActionType::Attack variant
+            // giving 1 to Attack variant will match every "Attack", it is here to satisfy resource_equals
+            resource_exists::<ActionType>().and_then(resource_equals(ActionType::Attack(1))),
+        ));
         messages_schedule.add_systems(message_reader);
         game_end_schedule.add_systems(check_game_end);
 

@@ -134,11 +134,52 @@ pub(crate) fn check_game_end(
 }
 
 pub(crate) fn get_player_action(
-    mut message_writer: EventWriter<GameMessageEvent>,
-    player_with_turn: Query<&Player, (With<IsTurn>, With<IsAlive>)>,
+    mut commands: Commands,
+    player_with_turn: Query<(Entity, &Player), (With<IsTurn>, With<IsAlive>)>,
+    players_without_turn: Query<&Player, (Without<IsTurn>, With<IsAlive>)>,
 ) {
-    let player_with_turn = match player_with_turn.get_single() {
-        Ok(res) => res,
+    match player_with_turn.get_single() {
+        Ok(player) => {
+            println!(
+                "{}",
+                format!("{} select an action to perform!", player.1.name)
+            );
+            player
+        }
         Err(_) => return,
     };
+
+    let mut user_input = String::new();
+    let stdin = io::stdin();
+    stdin.read_line(&mut user_input).unwrap();
+    let user_action = user_input.trim().parse::<u32>().unwrap_or(1);
+    let action_type: ActionType = match user_action {
+        1 => {
+            println!("Select a player to attack!");
+            let player = players_without_turn.get_single().unwrap();
+            ActionType::Attack(player.id)
+            // if players_without_turn.iter().len() == 1 {
+            // } else {
+            //     for (i, player) in players_without_turn.iter().enumerate(){
+            //         println!("{}", format!("{} : {}", i, player.name));
+            //     }
+            //     let mut user_input = String::new();
+            //     let stdin = io::stdin();
+            //     stdin.read_line(&mut user_input).unwrap();
+            //     let user_action = user_input.trim().parse::<u32>().unwrap_or(1);
+            //     let action_type = match user_action {
+
+            //     }
+            // }
+        }
+        2 => ActionType::ChooseWeapon(1),
+        3 => ActionType::Heal,
+        _ => ActionType::NoAction,
+    };
+
+    println!("You Chose: {:?} ", action_type);
+    // inserting the same resource will overwrite the others,
+    // that means one action type can only exist per world tick,
+    // perfect for a turn based game, there can only be one action per turn
+    commands.insert_resource(action_type);
 }
