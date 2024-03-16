@@ -1,11 +1,14 @@
+use anyhow::Result;
+use env_logger::Env;
 use game_core::schedules::GameWorldState;
-use pyo3::prelude::*;
-
 mod game_core;
 
-/// Formats the sum of two numbers as string.
-#[pyfunction]
-fn run() -> PyResult<()> {
+fn main() -> Result<()> {
+    let env = Env::default()
+        .filter_or("GLADOID_LOG_LEVEL", "info")
+        .write_style_or("GLADOID_LOG_STYLE", "auto");
+    env_logger::init_from_env(env);
+
     let mut world = game_core::schedules::GladoidGameWorld::new();
 
     world.spawn_player("Sergen".to_string(), 10);
@@ -17,12 +20,5 @@ fn run() -> PyResult<()> {
             _ => (),
         }
     }
-    Ok(())
-}
-
-/// A Python module implemented in Rust.
-#[pymodule]
-fn gladoid_bevy(_py: Python, m: &PyModule) -> PyResult<()> {
-    m.add_function(wrap_pyfunction!(run, m)?)?;
     Ok(())
 }

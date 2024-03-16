@@ -18,7 +18,7 @@ impl From<String> for GameMessageEvent {
 }
 
 pub(crate) fn message_reader(mut reader: EventReader<GameMessageEvent>) {
-    for event in reader.iter() {
-        println!("{}", event.message);
+    for event in reader.read() {
+        log::info!("{}", event.message);
     }
 }

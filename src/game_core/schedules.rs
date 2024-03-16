@@ -50,7 +50,7 @@ impl GladoidGameWorld {
         attack_schedule.add_systems((attack, update_alive.after(attack)).run_if(
             // only run if there is an ActionType that matches ActionType::Attack variant
             // giving 1 to Attack variant will match every "Attack", it is here to satisfy resource_equals
-            resource_exists::<ActionType>().and_then(resource_equals(ActionType::Attack(1))),
+            resource_exists::<ActionType>.and_then(resource_equals(ActionType::Attack(1))),
         ));
         messages_schedule.add_systems(message_reader.run_if(on_event::<GameMessageEvent>()));
         game_end_schedule.add_systems(check_game_end.run_if(on_event::<PlayerDiedEvent>()));
@@ -78,12 +78,12 @@ impl GladoidGameWorld {
             GameWorldState::Fighting => (),
         }
 
-        println!("Ticking...");
+        log::info!("Ticking...");
         // TODO: make the checking for game_end better, somehow
         let game_end_event = self.world.get_resource::<Events<GameEndEvent>>().unwrap();
         let game_end_event_reader = game_end_event.get_reader();
         if game_end_event_reader.len(&game_end_event) > 0 {
-            println!("Game has ended, can't progress further.");
+            log::info!("Game has ended, can't progress further.");
             self.state = GameWorldState::Done;
             return;
         }
