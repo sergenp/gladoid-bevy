@@ -7,8 +7,9 @@ RUN apt-get -qq update && \
 
 ENV PATH="/root/.cargo/bin:${PATH}"
 WORKDIR /app/gladoid-bevy
-RUN cargo install cargo-watch && pip install poetry --no-cache-dir && poetry config virtualenvs.create false && poetry install --without dev --no-interaction --no-cache
+RUN cargo install cargo-watch && pip install poetry --no-cache-dir && poetry config virtualenvs.create false
 COPY . .
+RUN poetry install --no-interaction --no-cache
 
 FROM python:3.11-slim as builder
 RUN apt-get -qq update && \
@@ -27,7 +28,7 @@ FROM python:3.11-slim as release
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 
-RUN pip install poetry --no-cache-dir && poetry config virtualenvs.create false &&  poetry install --without dev --no-interaction --no-cache
+RUN pip install poetry --no-cache-dir && poetry config virtualenvs.create false && poetry install --no-interaction --no-cache
 
 WORKDIR /app
 # Copy the compiled gladoid-bevy

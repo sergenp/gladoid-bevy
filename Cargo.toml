@@ -3,6 +3,9 @@ name = "gladoid-bevy"
 version = "0.1.0"
 edition = "2021"
 
+[lib]
+name = "gladoid_bevy"
+crate-type = ["cdylib"]
 
 [dependencies]
 pyo3 = { version = "0.20.3", features = ["auto-initialize", "anyhow"] }

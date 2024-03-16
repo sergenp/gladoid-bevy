@@ -1,3 +1,5 @@
+use anyhow::bail;
+use anyhow::Result;
 use bevy_ecs::{
     event::Events,
     schedule::{
@@ -7,19 +9,22 @@ use bevy_ecs::{
     },
     world::World,
 };
+use pyo3::{pyclass, pymethods};
 
 use super::{
-    actions::ActionType,
+    actions::{ActionType, NeedAction},
     events::{message_reader, GameEndEvent, GameMessageEvent, PlayerDiedEvent},
     structs::{Health, IsAlive, Player, TurnProgress, TurnSpeed, Weapon},
-    systems::{attack, check_game_end, end_turn, get_player_action, race_for_turn, update_alive},
+    systems::{attack, check_game_end, end_turn, insert_need_action, race_for_turn, update_alive},
 };
 
 pub enum GameWorldState {
+    NeedAction,
     Fighting,
     Done,
 }
 
+#[pyclass]
 pub(crate) struct GladoidGameWorld {
     world: World,
     schedules: Vec<Schedule>,
@@ -27,7 +32,9 @@ pub(crate) struct GladoidGameWorld {
     pub(crate) state: GameWorldState,
 }
 
+#[pymethods]
 impl GladoidGameWorld {
+    #[new]
     pub fn new() -> Self {
         let mut world = World::default();
         let mut turn_schedule = Schedule::default();
@@ -46,7 +53,7 @@ impl GladoidGameWorld {
         world.insert_resource(game_end_event);
 
         turn_schedule.add_systems(race_for_turn);
-        input_schedule.add_systems(get_player_action);
+        input_schedule.add_systems(insert_need_action);
         attack_schedule.add_systems((attack, update_alive.after(attack)).run_if(
             // only run if there is an ActionType that matches ActionType::Attack variant
             // giving 1 to Attack variant will match every "Attack", it is here to satisfy resource_equals
@@ -59,8 +66,8 @@ impl GladoidGameWorld {
         let mut schedules = Vec::new();
         let mut event_schedules = Vec::new();
         schedules.push(turn_schedule);
-        schedules.push(input_schedule);
         schedules.push(attack_schedule);
+        schedules.push(input_schedule);
         schedules.push(cleanup_schedule);
         event_schedules.push(game_end_schedule);
         event_schedules.push(messages_schedule);
@@ -72,10 +79,30 @@ impl GladoidGameWorld {
         }
     }
 
-    pub fn tick(&mut self) {
+    pub fn need_action(&mut self) -> bool {
+        self.world.get_resource::<NeedAction>().is_some()
+    }
+
+    pub fn is_done(&mut self) -> bool {
+        if self.need_action() {
+            return false;
+        }
         match self.state {
-            GameWorldState::Done => return,
-            GameWorldState::Fighting => (),
+            GameWorldState::Done => return true,
+            _ => return false,
+        }
+    }
+
+    pub fn insert_action(&mut self, attack: u32) {
+        if self.need_action() {
+            self.world.insert_resource(ActionType::Attack(attack));
+            self.world.remove_resource::<NeedAction>();
+        }
+    }
+
+    pub fn tick(&mut self) -> Result<()> {
+        if self.is_done() {
+            bail!("Game is done, cannot continue...")
         }
 
         log::info!("Ticking...");
@@ -83,9 +110,8 @@ impl GladoidGameWorld {
         let game_end_event = self.world.get_resource::<Events<GameEndEvent>>().unwrap();
         let game_end_event_reader = game_end_event.get_reader();
         if game_end_event_reader.len(&game_end_event) > 0 {
-            log::info!("Game has ended, can't progress further.");
             self.state = GameWorldState::Done;
-            return;
+            bail!("Game is done, cannot continue...")
         }
 
         for schedule in self.schedules.iter_mut() {
@@ -96,6 +122,7 @@ impl GladoidGameWorld {
             }
         }
         self.world.clear_trackers();
+        Ok(())
     }
 
     pub(crate) fn spawn_player(&mut self, name: String, hp: i16) {

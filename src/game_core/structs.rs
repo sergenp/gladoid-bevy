@@ -16,7 +16,7 @@ pub struct IsTurn;
 #[derive(Component)]
 pub struct IsAlive;
 
-#[derive(Component)]
+#[derive(Component, Clone)]
 pub struct Player {
     pub id: u32,
     pub name: String,

@@ -1,4 +1,3 @@
-use anyhow::Result;
 use bevy_ecs::{
     entity::Entity,
     event::EventWriter,
@@ -6,13 +5,11 @@ use bevy_ecs::{
     system::{Commands, Query},
     world::Mut,
 };
-use pyo3::{types::PyModule, Py, PyAny, Python};
 use rand::{distributions::WeightedIndex, prelude::Distribution, thread_rng};
 
-use crate::game_core::structs::IsTurn;
+use crate::game_core::{actions::NeedAction, structs::IsTurn};
 
 use super::{
-    actions::ActionType,
     events::{GameEndEvent, GameMessageEvent, PlayerDiedEvent},
     structs::{Health, IsAlive, Player, TurnProgress, TurnSpeed, Weapon},
 };
@@ -143,56 +140,52 @@ pub(crate) fn check_game_end(
     message_writer.send_batch(messages);
 }
 
-pub(crate) fn get_player_action(
+pub(crate) fn insert_need_action(
     mut commands: Commands,
     player_with_turn: Query<(Entity, &Player), (With<IsTurn>, With<IsAlive>)>,
-    players_without_turn: Query<&Player, (Without<IsTurn>, With<IsAlive>)>,
 ) {
-    match player_with_turn.get_single() {
-        Ok(player) => player,
+    let player: Player = match player_with_turn.get_single() {
+        Ok(entity) => entity.1.clone(),
         Err(_) => return,
     };
-    let get_action = include_str!(concat!(
-        env!("CARGO_MANIFEST_DIR"),
-        "\\src\\gladoid_discord\\main.py"
-    ));
 
-    let action = Python::with_gil(|py| -> Result<i32> {
-        let func: Py<PyAny> = PyModule::from_code(py, get_action, "", "")?
-            .getattr("get_action")?
-            .into();
-        let res: i32 = func.call0(py)?.extract(py)?;
-        Ok(res)
-    })
-    .unwrap();
-
-    let action_type: ActionType = match action {
-        1 => {
-            log::info!("Select a player to attack!");
-            let player = players_without_turn.get_single().unwrap();
-            ActionType::Attack(player.id)
-            // if players_without_turn.iter().len() == 1 {
-            // } else {
-            //     for (i, player) in players_without_turn.iter().enumerate(){
-            //         println!("{}", format!("{} : {}", i, player.name));
-            //     }
-            //     let mut user_input = String::new();
-            //     let stdin = io::stdin();
-            //     stdin.read_line(&mut user_input).unwrap();
-            //     let user_action = user_input.trim().parse::<u32>().unwrap_or(1);
-            //     let action_type = match user_action {
-
-            //     }
-            // }
-        }
-        2 => ActionType::ChooseWeapon(1),
-        3 => ActionType::Heal,
-        _ => ActionType::NoAction,
-    };
-
-    log::info!("You Chose: {:?} ", action_type);
-    // // inserting the same resource will overwrite the others,
-    // // that means one action type can only exist per world tick,
-    // // perfect for a turn based game, there can only be one action per turn
-    commands.insert_resource(action_type);
+    commands.insert_resource(NeedAction { player });
 }
+
+// pub(crate) fn get_player_action(mut commands: Commands, need_action: Option<ResMut<NeedAction>>) {
+//     let action = 1;
+//     let player_with_turn = match need_action {
+//         Some(need_action) => need_action.player,
+//         None => return,
+//     };
+
+//     let action_type: ActionType = match action {
+//         1 => {
+//             log::info!("Select a player to attack!");
+//             let player = players_without_turn.get_single().unwrap();
+//             ActionType::Attack(player.id)
+//             // if players_without_turn.iter().len() == 1 {
+//             // } else {
+//             //     for (i, player) in players_without_turn.iter().enumerate(){
+//             //         println!("{}", format!("{} : {}", i, player.name));
+//             //     }
+//             //     let mut user_input = String::new();
+//             //     let stdin = io::stdin();
+//             //     stdin.read_line(&mut user_input).unwrap();
+//             //     let user_action = user_input.trim().parse::<u32>().unwrap_or(1);
+//             //     let action_type = match user_action {
+
+//             //     }
+//             // }
+//         }
+//         2 => ActionType::ChooseWeapon(1),
+//         3 => ActionType::Heal,
+//         _ => ActionType::NoAction,
+//     };
+
+//     log::info!("You Chose: {:?} ", action_type);
+//     // // inserting the same resource will overwrite the others,
+//     // // that means one action type can only exist per world tick,
+//     // // perfect for a turn based game, there can only be one action per turn
+//     commands.insert_resource(action_type);
+// }
