@@ -1,4 +1,5 @@
 use anyhow::bail;
+use anyhow::Context;
 use anyhow::Result;
 use bevy_ecs::{
     event::Events,
@@ -9,8 +10,10 @@ use bevy_ecs::{
     },
     world::World,
 };
-use pyo3::{pyclass, pymethods};
+use pyo3::prelude::*;
+use pyo3::types::PyDict;
 
+use super::actions;
 use super::{
     actions::{ActionType, NeedAction},
     events::{message_reader, GameEndEvent, GameMessageEvent, PlayerDiedEvent},
@@ -93,11 +96,44 @@ impl GladoidGameWorld {
         }
     }
 
-    pub fn insert_action(&mut self, attack: u32) {
-        if self.need_action() {
-            self.world.insert_resource(ActionType::Attack(attack));
-            self.world.remove_resource::<NeedAction>();
+    #[pyo3(signature = (**kwargs))]
+    pub fn insert_action(&mut self, kwargs: Option<&PyDict>) -> Result<()> {
+        if !self.need_action() {
+            bail!("No need for an action...")
         }
+
+        let kwargs = match kwargs {
+            Some(kwargs) => kwargs,
+            None => bail!("No kwargs has been passed!"),
+        };
+
+        let action_id: u32 = kwargs
+            .get_item("action_id")?
+            .context("No `action_id kwargs has been passed!")?
+            .extract()?;
+        let action = match action_id {
+            1 => {
+                let player_id_kw: u32 = kwargs
+                    .get_item("player_id")?
+                    .context("Action with `action_id` 1 needs to also have `player_id`!")?
+                    .extract()?;
+                ActionType::Attack(player_id_kw)
+            }
+            2 => {
+                let weapon_id: u32 = kwargs
+                    .get_item("player_id")?
+                    .context("Action with `action_id` 2 needs to also have `weapon_id`!")?
+                    .extract()?;
+                ActionType::ChooseWeapon(weapon_id)
+            }
+            3 => ActionType::Heal,
+            _ => ActionType::NoAction,
+        };
+        self.world.insert_resource(action);
+        self.world
+            .remove_resource::<NeedAction>()
+            .context("Couldn't remove NeedAction...")?;
+        Ok(())
     }
 
     pub fn tick(&mut self) -> Result<()> {

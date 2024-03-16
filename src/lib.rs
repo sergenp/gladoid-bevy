@@ -5,7 +5,7 @@ use pyo3::{pyfunction, pymodule, types::PyModule, wrap_pyfunction, PyResult, Pyt
 mod game_core;
 
 #[pyfunction]
-fn run() -> Result<GladoidGameWorld> {
+fn create_world() -> Result<GladoidGameWorld> {
     let mut world = game_core::schedules::GladoidGameWorld::new();
 
     world.spawn_player("Sergen".to_string(), 10);
@@ -20,6 +20,6 @@ fn gladoid_bevy(_py: Python, m: &PyModule) -> PyResult<()> {
         .write_style_or("GLADOID_LOG_STYLE", "auto");
     env_logger::init_from_env(env);
 
-    m.add_function(wrap_pyfunction!(run, m)?)?;
+    m.add_function(wrap_pyfunction!(create_world, m)?)?;
     Ok(())
 }
