@@ -1,0 +1,16 @@
+version: '3.4'
+
+volumes:
+  debug-py:
+
+services:
+  gladoidbot:
+    image: gladoidbot
+    build:
+      dockerfile: .
+      target: dev
+    volumes:
+      - ./gladoid-bevy/src:/app/gladoid-bevy/src
+      - ./gladoid-bevy/Cargo.toml:/app/gladoid-bevy/Cargo.toml
+      - ./gladoid-bevy/Cargo.lock:/app/gladoid-bevy/Cargo.lock
+    command: cargo watch --poll --why -x run
