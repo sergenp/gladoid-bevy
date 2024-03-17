@@ -16,25 +16,21 @@ use super::{
 };
 
 pub(crate) fn race_for_turn(
-    mut message_writer: EventWriter<GameMessageEvent>,
     mut commands: Commands,
     mut players: Query<(Entity, &Player, &TurnSpeed, &mut TurnProgress), With<IsAlive>>,
 ) {
-    let mut messages: Vec<GameMessageEvent> = vec![];
     let mut entities_with_turn: Vec<(Entity, &Player, Mut<'_, TurnProgress>)> = vec![];
     let mut weights: Vec<u16> = vec![];
     for (entity, player, turn_speed, mut turn_progress) in players.iter_mut() {
         turn_progress.progress += turn_speed.speed;
-        messages.push(format!("{} has {:?} speed", player.name, turn_speed).into());
-        messages.push(
-            format!(
-                "{} has {:?} progress for a turn",
-                player.name, turn_progress.progress
-            )
-            .into(),
+        log::debug!("{} has {:?}", player.name, turn_speed);
+        log::debug!(
+            "{} has {:?} progress for a turn",
+            player.name,
+            turn_progress.progress
         );
         if turn_progress.progress >= 100 {
-            messages.push(format!("Giving turn to {}", player.name).into());
+            log::debug!("Giving turn to {}", player.name);
             commands.entity(entity).insert(IsTurn);
             weights.push(turn_progress.progress);
             entities_with_turn.push((entity, player, turn_progress));
@@ -59,8 +55,7 @@ pub(crate) fn race_for_turn(
             let mut rng = thread_rng();
             // remove the selected entity from the array so the entity keeps its turn
             let mut entity_selected_for_turn = entities_with_turn.remove(dist.sample(&mut rng));
-            messages
-                .push(format!("{} selected for the turn", entity_selected_for_turn.1.name).into());
+            log::debug!("{} selected for the turn", entity_selected_for_turn.1.name);
             entity_selected_for_turn.2.progress = 0;
             // for the rest of the entities, remove IsTurn, so only one entity can keep IsTurn,
             // which is the randomly selected one
@@ -69,11 +64,9 @@ pub(crate) fn race_for_turn(
             }
         }
     }
-    message_writer.send_batch(messages);
 }
 
 pub(crate) fn attack(
-    mut commands: Commands,
     mut message_writer: EventWriter<GameMessageEvent>,
     attack_action: Res<ActionType>,
     player_with_turn: Query<(&Player, &Weapon), (With<IsTurn>, With<IsAlive>)>,
@@ -109,19 +102,28 @@ pub(crate) fn attack(
         Some(entity) => entity,
         // should never reach here
         None => {
-            log::debug!("Attacked someone that does not exist... Somehow.");
+            message_writer.send(
+                format!(
+                    "{} Attacked someone that does not exist... Somehow.",
+                    player1.name
+                )
+                .into(),
+            );
             return;
         }
     };
-
     health.hp -= weapon.damage as i16;
     let messages: Vec<GameMessageEvent> = vec![
         format!(
-            "{}, {}'nın kafasına {}le vurdu.",
+            "{} hit {} in the head with a {}.",
             player1.name, player2.name, weapon.name
         )
         .into(),
-        format!("{} {} hasar aldı.", player2.name, weapon.damage).into(),
+        format!(
+            "{} took {} damage. {} has {} hp left",
+            player2.name, weapon.damage, player2.name, health.hp
+        )
+        .into(),
     ];
     message_writer.send_batch(messages);
 }
@@ -164,12 +166,11 @@ pub(crate) fn check_game_end(
 
     if let Ok(dead_player) = dead_player.get_single() {
         if let Ok(alive_player) = alive_player.get_single() {
-            messages
-                .push(format!("{} öldü. {} kazandı.", dead_player.name, alive_player.name).into());
+            messages.push(format!("{} died. {} won.", dead_player.name, alive_player.name).into());
+            message_writer.send_batch(messages);
             game_end_writer.send_default();
         }
     };
-    message_writer.send_batch(messages);
 }
 
 pub(crate) fn insert_need_action(
@@ -183,41 +184,3 @@ pub(crate) fn insert_need_action(
 
     commands.insert_resource(NeedAction { player });
 }
-
-// pub(crate) fn get_player_action(mut commands: Commands, need_action: Option<ResMut<NeedAction>>) {
-//     let action = 1;
-//     let player_with_turn = match need_action {
-//         Some(need_action) => need_action.player,
-//         None => return,
-//     };
-
-//     let action_type: ActionType = match action {
-//         1 => {
-//             log::info!("Select a player to attack!");
-//             let player = players_without_turn.get_single().unwrap();
-//             ActionType::Attack(player.id)
-//             // if players_without_turn.iter().len() == 1 {
-//             // } else {
-//             //     for (i, player) in players_without_turn.iter().enumerate(){
-//             //         println!("{}", format!("{} : {}", i, player.name));
-//             //     }
-//             //     let mut user_input = String::new();
-//             //     let stdin = io::stdin();
-//             //     stdin.read_line(&mut user_input).unwrap();
-//             //     let user_action = user_input.trim().parse::<u32>().unwrap_or(1);
-//             //     let action_type = match user_action {
-
-//             //     }
-//             // }
-//         }
-//         2 => ActionType::ChooseWeapon(1),
-//         3 => ActionType::Heal,
-//         _ => ActionType::NoAction,
-//     };
-
-//     log::info!("You Chose: {:?} ", action_type);
-//     // // inserting the same resource will overwrite the others,
-//     // // that means one action type can only exist per world tick,
-//     // // perfect for a turn based game, there can only be one action per turn
-//     commands.insert_resource(action_type);
-// }

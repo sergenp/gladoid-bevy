@@ -20,11 +20,13 @@ pub struct IsAlive;
 #[derive(Component, Clone)]
 #[pyclass]
 pub struct Player {
+    #[pyo3(get)]
     pub id: u32,
+    #[pyo3(get)]
     pub name: String,
 }
 
-#[derive(Component)]
+#[derive(Debug, Component)]
 pub struct Health {
     pub hp: i16,
 }

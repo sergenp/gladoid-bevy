@@ -1,4 +1,4 @@
-use bevy_ecs::event::{Event, EventReader};
+use bevy_ecs::event::Event;
 
 #[derive(Event, Default)]
 pub(crate) struct GameMessageEvent {
@@ -17,8 +17,8 @@ impl From<String> for GameMessageEvent {
     }
 }
 
-pub(crate) fn message_reader(mut reader: EventReader<GameMessageEvent>) {
-    for event in reader.read() {
-        log::info!("{}", event.message);
+impl From<&GameMessageEvent> for String {
+    fn from(value: &GameMessageEvent) -> Self {
+        value.message.clone()
     }
 }

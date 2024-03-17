@@ -16,7 +16,7 @@ fn create_world() -> Result<GladoidGameWorld> {
 #[pymodule]
 fn gladoid_bevy(_py: Python, m: &PyModule) -> PyResult<()> {
     let env = Env::default()
-        .filter_or("GLADOID_LOG_LEVEL", "info")
+        .filter_or("GLADOID_LOG_LEVEL", "debug")
         .write_style_or("GLADOID_LOG_STYLE", "auto");
     env_logger::init_from_env(env);
 

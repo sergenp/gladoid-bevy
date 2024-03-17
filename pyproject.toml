@@ -13,6 +13,10 @@ readme = "README.md"
 python = "^3.11"
 discord-py = "^2.3.2"
 maturin = "^1.5.0"
+dynaconf = "^3.2.4"
+
+[tool.poetry.group.dev.dependencies]
+mypy = "^1.9.0"
 
 [tool.maturin]
 features = ["pyo3/extension-module"]

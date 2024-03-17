@@ -15,7 +15,7 @@ use pyo3::types::PyDict;
 
 use super::{
     actions::{ActionType, NeedAction},
-    events::{message_reader, GameEndEvent, GameMessageEvent, PlayerDiedEvent},
+    events::{GameEndEvent, GameMessageEvent, PlayerDiedEvent},
     structs::{Health, IsAlive, Player, TurnProgress, TurnSpeed, Weapon},
     systems::{attack, check_game_end, end_turn, insert_need_action, race_for_turn, update_alive},
 };
@@ -45,7 +45,6 @@ impl GladoidGameWorld {
         let mut turn_schedule = Schedule::default();
         let mut attack_schedule = Schedule::default();
         let mut game_end_schedule = Schedule::default();
-        let mut messages_schedule = Schedule::default();
         let mut input_schedule = Schedule::default();
 
         let player_died_event = Events::<PlayerDiedEvent>::default();
@@ -65,12 +64,10 @@ impl GladoidGameWorld {
                 resource_exists::<ActionType>.and_then(resource_equals(ActionType::Attack(1))),
             ),
         );
-        messages_schedule.add_systems(message_reader.run_if(on_event::<GameMessageEvent>()));
         game_end_schedule.add_systems(check_game_end.run_if(on_event::<PlayerDiedEvent>()));
 
         let mut event_schedules = Vec::new();
         event_schedules.push(game_end_schedule);
-        event_schedules.push(messages_schedule);
 
         let mut schedules = Vec::new();
         schedules.push(attack_schedule);
@@ -89,7 +86,7 @@ impl GladoidGameWorld {
         self.world.get_resource::<NeedAction>().is_some()
     }
 
-    pub fn need_action_from(&mut self) -> Option<Player> {
+    pub fn check_need_action_from(&mut self) -> Option<Player> {
         match self.world.get_resource::<NeedAction>() {
             Some(need_action_from) => Some(need_action_from.player.clone()),
             None => None,
@@ -163,7 +160,7 @@ impl GladoidGameWorld {
     }
 
     pub fn tick(&mut self) -> Result<()> {
-        log::info!("Ticking...");
+        log::debug!("Ticking...");
         for schedule in self.schedules.iter_mut() {
             schedule.run(&mut self.world);
             // need to process events per schedule, to avoid frame delays
@@ -195,5 +192,21 @@ impl GladoidGameWorld {
             TurnProgress { progress: 0 },
             IsAlive,
         ));
+    }
+
+    pub fn get_game_messages(&mut self) -> Vec<String> {
+        let mut message_event = self
+            .world
+            .get_resource_mut::<Events<GameMessageEvent>>()
+            .unwrap();
+
+        let messages: Vec<String> = message_event
+            .get_reader()
+            .read(&message_event)
+            .map(|event| event.into())
+            .collect();
+        // clear old events
+        message_event.clear();
+        messages
     }
 }
