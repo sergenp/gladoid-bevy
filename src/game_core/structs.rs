@@ -1,4 +1,5 @@
 use bevy_ecs::component::Component;
+use pyo3::pyclass;
 
 #[derive(Debug, Component)]
 pub struct TurnProgress {
@@ -17,6 +18,7 @@ pub struct IsTurn;
 pub struct IsAlive;
 
 #[derive(Component, Clone)]
+#[pyclass]
 pub struct Player {
     pub id: u32,
     pub name: String,

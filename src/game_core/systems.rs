@@ -2,7 +2,7 @@ use bevy_ecs::{
     entity::Entity,
     event::EventWriter,
     query::{With, Without},
-    system::{Commands, Query},
+    system::{Commands, Query, Res},
     world::Mut,
 };
 use rand::{distributions::WeightedIndex, prelude::Distribution, thread_rng};
@@ -10,6 +10,7 @@ use rand::{distributions::WeightedIndex, prelude::Distribution, thread_rng};
 use crate::game_core::{actions::NeedAction, structs::IsTurn};
 
 use super::{
+    actions::ActionType,
     events::{GameEndEvent, GameMessageEvent, PlayerDiedEvent},
     structs::{Health, IsAlive, Player, TurnProgress, TurnSpeed, Weapon},
 };
@@ -72,18 +73,47 @@ pub(crate) fn race_for_turn(
 }
 
 pub(crate) fn attack(
+    mut commands: Commands,
     mut message_writer: EventWriter<GameMessageEvent>,
+    attack_action: Res<ActionType>,
     player_with_turn: Query<(&Player, &Weapon), (With<IsTurn>, With<IsAlive>)>,
-    mut player_without_turn: Query<(&Player, &mut Health), (Without<IsTurn>, With<IsAlive>)>,
+    mut players_without_turn: Query<(&Player, &mut Health), (Without<IsTurn>, With<IsAlive>)>,
 ) {
     let (player1, weapon) = match player_with_turn.get_single() {
         Ok(res) => res,
-        Err(_) => return,
+        Err(_) => {
+            log::debug!("No one has the turn...");
+            return;
+        }
     };
-    let (player2, mut health) = match player_without_turn.get_single_mut() {
-        Ok(res) => res,
-        Err(_) => return,
+
+    let attacked_player_id = match attack_action.as_ref() {
+        ActionType::Attack(player_id) => player_id.to_owned(),
+        _ => {
+            log::debug!(
+                "ActionType is not Attack yet somehow we're running the attack schedule..."
+            );
+            return;
+        }
     };
+
+    let mut attacked_entity: Option<(&Player, Mut<'_, Health>)> = None;
+    for entity_without_turn in players_without_turn.iter_mut() {
+        if entity_without_turn.0.id == attacked_player_id {
+            attacked_entity = Some(entity_without_turn);
+            break;
+        }
+    }
+
+    let (player2, mut health) = match attacked_entity {
+        Some(entity) => entity,
+        // should never reach here
+        None => {
+            log::debug!("Attacked someone that does not exist... Somehow.");
+            return;
+        }
+    };
+
     health.hp -= weapon.damage as i16;
     let messages: Vec<GameMessageEvent> = vec![
         format!(
@@ -107,6 +137,8 @@ pub(crate) fn end_turn(
         messages.push(format!("Removing turn from {}...", player.name).into())
     }
     message_writer.send_batch(messages);
+    commands.remove_resource::<ActionType>();
+    commands.remove_resource::<NeedAction>();
 }
 
 pub(crate) fn update_alive(

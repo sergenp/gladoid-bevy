@@ -13,7 +13,6 @@ use bevy_ecs::{
 use pyo3::prelude::*;
 use pyo3::types::PyDict;
 
-use super::actions;
 use super::{
     actions::{ActionType, NeedAction},
     events::{message_reader, GameEndEvent, GameMessageEvent, PlayerDiedEvent},
@@ -21,6 +20,8 @@ use super::{
     systems::{attack, check_game_end, end_turn, insert_need_action, race_for_turn, update_alive},
 };
 
+#[derive(PartialEq)]
+#[pyclass]
 pub enum GameWorldState {
     NeedAction,
     Fighting,
@@ -32,7 +33,8 @@ pub(crate) struct GladoidGameWorld {
     world: World,
     schedules: Vec<Schedule>,
     event_schedules: Vec<Schedule>,
-    pub(crate) state: GameWorldState,
+    id_counter: u32,
+    pub state: GameWorldState,
 }
 
 #[pymethods]
@@ -45,7 +47,6 @@ impl GladoidGameWorld {
         let mut game_end_schedule = Schedule::default();
         let mut messages_schedule = Schedule::default();
         let mut input_schedule = Schedule::default();
-        let mut cleanup_schedule = Schedule::default();
 
         let player_died_event = Events::<PlayerDiedEvent>::default();
         let game_message_events = Events::<GameMessageEvent>::default();
@@ -57,48 +58,73 @@ impl GladoidGameWorld {
 
         turn_schedule.add_systems(race_for_turn);
         input_schedule.add_systems(insert_need_action);
-        attack_schedule.add_systems((attack, update_alive.after(attack)).run_if(
-            // only run if there is an ActionType that matches ActionType::Attack variant
-            // giving 1 to Attack variant will match every "Attack", it is here to satisfy resource_equals
-            resource_exists::<ActionType>.and_then(resource_equals(ActionType::Attack(1))),
-        ));
+        attack_schedule.add_systems(
+            (attack, update_alive.after(attack), end_turn.after(attack)).run_if(
+                // only run if there is an ActionType that matches ActionType::Attack variant
+                // giving 1 to Attack variant will match every "Attack", it is here to satisfy resource_equals
+                resource_exists::<ActionType>.and_then(resource_equals(ActionType::Attack(1))),
+            ),
+        );
         messages_schedule.add_systems(message_reader.run_if(on_event::<GameMessageEvent>()));
         game_end_schedule.add_systems(check_game_end.run_if(on_event::<PlayerDiedEvent>()));
-        cleanup_schedule.add_systems(end_turn);
 
-        let mut schedules = Vec::new();
         let mut event_schedules = Vec::new();
-        schedules.push(turn_schedule);
-        schedules.push(attack_schedule);
-        schedules.push(input_schedule);
-        schedules.push(cleanup_schedule);
         event_schedules.push(game_end_schedule);
         event_schedules.push(messages_schedule);
+
+        let mut schedules = Vec::new();
+        schedules.push(attack_schedule);
+        schedules.push(turn_schedule);
+        schedules.push(input_schedule);
         Self {
             world,
             schedules,
             event_schedules,
+            id_counter: 0,
             state: GameWorldState::Fighting,
         }
     }
 
-    pub fn need_action(&mut self) -> bool {
+    pub fn check_need_action(&mut self) -> bool {
         self.world.get_resource::<NeedAction>().is_some()
     }
 
-    pub fn is_done(&mut self) -> bool {
-        if self.need_action() {
-            return false;
+    pub fn need_action_from(&mut self) -> Option<Player> {
+        match self.world.get_resource::<NeedAction>() {
+            Some(need_action_from) => Some(need_action_from.player.clone()),
+            None => None,
         }
+    }
+
+    pub fn is_done(&mut self) -> bool {
         match self.state {
             GameWorldState::Done => return true,
             _ => return false,
         }
     }
 
+    fn set_state(&mut self) {
+        if self.check_need_action() {
+            self.state = GameWorldState::NeedAction
+        } else if self.check_game_ended() {
+            self.state = GameWorldState::Done
+        } else {
+            self.state = GameWorldState::Fighting
+        }
+    }
+
+    fn check_game_ended(&mut self) -> bool {
+        let game_end_event = self.world.get_resource::<Events<GameEndEvent>>().unwrap();
+        let game_end_event_reader = game_end_event.get_reader();
+        if game_end_event_reader.len(&game_end_event) > 0 {
+            return true;
+        }
+        return false;
+    }
+
     #[pyo3(signature = (**kwargs))]
     pub fn insert_action(&mut self, kwargs: Option<&PyDict>) -> Result<()> {
-        if !self.need_action() {
+        if self.state != GameWorldState::NeedAction {
             bail!("No need for an action...")
         }
 
@@ -137,19 +163,7 @@ impl GladoidGameWorld {
     }
 
     pub fn tick(&mut self) -> Result<()> {
-        if self.is_done() {
-            bail!("Game is done, cannot continue...")
-        }
-
         log::info!("Ticking...");
-        // TODO: make the checking for game_end better, somehow
-        let game_end_event = self.world.get_resource::<Events<GameEndEvent>>().unwrap();
-        let game_end_event_reader = game_end_event.get_reader();
-        if game_end_event_reader.len(&game_end_event) > 0 {
-            self.state = GameWorldState::Done;
-            bail!("Game is done, cannot continue...")
-        }
-
         for schedule in self.schedules.iter_mut() {
             schedule.run(&mut self.world);
             // need to process events per schedule, to avoid frame delays
@@ -157,14 +171,19 @@ impl GladoidGameWorld {
                 event_schedule.run(&mut self.world);
             }
         }
+        self.set_state();
+        if self.is_done() {
+            bail!("Game is done, cannot continue...")
+        }
         self.world.clear_trackers();
         Ok(())
     }
 
-    pub(crate) fn spawn_player(&mut self, name: String, hp: i16) {
+    pub fn spawn_player(&mut self, name: String, hp: i16) {
+        self.id_counter += 1;
         self.world.spawn((
             Player {
-                id: 1,
+                id: self.id_counter,
                 name: name.to_string(),
             },
             Weapon {
